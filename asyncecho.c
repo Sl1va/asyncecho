@@ -274,67 +274,35 @@ static void client_handler(struct ev_loop *loop, ev_io *w, int revents) {
     const char *client_name = addr2str(&client_addr);
 
     buff_t *buf = (buff_t *)w->data;
+    ssize_t bytes_n = 0;  // Number of bytes processed at current state
+    int next_event = 0;   // Next event to wait (either EV_READ or EV_WRITE)
 
     if (revents & EV_READ) {
         // If the client connection is readable, read the data
         // into intermediate buffer and switch watcher to wait for
         // writeable state, so we can write the buffer data back to it
-        ssize_t read_n = read(w->fd, buf->buf, sizeof(buf->buf));
-        buf->len = read_n;
+        bytes_n = read(w->fd, buf->buf, sizeof(buf->buf));
+        buf->len = bytes_n;
 
-        if (read_n < 0) {
-            // Some error occured - need to abort connection (if it is not
-            // temporal state)
-            if (!is_async_skip()) {
-                logger(loop, "Connection with %s failed (%s)", client_name,
-                       strerror(errno));
-                destroy_client_watcher(loop, w);
-            }
-
-            // In case if the error is temporal - make another attempt to read
-            return;
-        } else if (read_n == 0) {
-            // Connection has been terminated
-            logger(loop, "Connection with %s has been terminated\n",
+        if (bytes_n > 0) {
+            logger(loop, "Received %lu bytes of data from %s\n", bytes_n,
                    client_name);
-            destroy_client_watcher(loop, w);
-            return;
         }
 
-        logger(loop, "Received %lu bytes of data from %s\n", read_n,
-               client_name);
+        next_event = EV_WRITE;
 
-        ev_io_stop(loop, w);
-        ev_io_set(w, w->fd, EV_WRITE);
-        ev_io_start(loop, w);
     } else if (revents & EV_WRITE) {
-        // At this point we are guaranteed to have:
-        //   1. Buffer with some data to send back to client
-        //   2. Writeable socket (unless some error happened)
-        // So we can try to write back to socket and then switch back to
-        // listener state
+        // Writeable state is following readable state.
+        // It is guaranteed that:
+        //   1. There is buffer with some ready data to be sent to client
+        //   2. Client socket is read to be written
+        //      (unless error happened on it)
 
-        ssize_t write_n = write(w->fd, buf->buf, buf->len);
+        // So we can try to write buffer to socket and then switch back to
+        // waiting for readable state
 
-        if (write_n < 0) {
-            if (!is_async_skip()) {
-                logger(loop, "Connection with %s failed (%s)", client_name,
-                       strerror(errno));
-                destroy_client_watcher(loop, w);
-            }
-
-            return;
-        } else if (write_n == 0) {
-            logger(loop, "Connection with %s has been terminated\n",
-                   client_name);
-            destroy_client_watcher(loop, w);
-            return;
-        }
-
-        buf->len = 0;
-        ev_io_stop(loop, w);
-        ev_io_set(w, w->fd, EV_READ);
-        ev_io_start(loop, w);
+        bytes_n = write(w->fd, buf->buf, buf->len);
+        next_event = EV_READ;
     } else {
         // Unexpected state occured
         logger(loop, "Unexpected state occured with %s. Terminating connection",
@@ -342,6 +310,29 @@ static void client_handler(struct ev_loop *loop, ev_io *w, int revents) {
         destroy_client_watcher(loop, w);
         return;
     }
+
+    if (bytes_n < 0) {
+        // Some error occured - need to abort connection
+        // (unless it is temporal error caused by non-blocking mode)
+        if (!is_async_skip()) {
+            logger(loop, "Connection with %s failed (%s)", client_name,
+                   strerror(errno));
+            destroy_client_watcher(loop, w);
+        }
+
+        // In case if the error is temporal - make another attempt
+        return;
+    } else if (bytes_n == 0) {
+        // Connection has been terminated - just cleanup
+        logger(loop, "Connection with %s has been terminated\n", client_name);
+        destroy_client_watcher(loop, w);
+        return;
+    }
+
+    // Update watcher event type to opposite
+    ev_io_stop(loop, w);
+    ev_io_set(w, w->fd, next_event);
+    ev_io_start(loop, w);
 }
 
 /**
