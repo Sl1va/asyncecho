@@ -124,7 +124,7 @@ static inline void destroy_client_watcher(struct ev_loop *loop,
 }
 
 /**
- * @brief Set up non-blocking socket in listen() state
+ * @brief Set up non-blocking socket in listen() mode
  *
  * @return int Socket fd
  */
@@ -165,7 +165,7 @@ static int setup_listener_socket() {
 }
 
 /**
- * @brief Set socket to non-blocking state
+ * @brief Set socket to non-blocking mode
  *
  * @param sockfd Socket fd
  * @return int fcntl return value
@@ -200,8 +200,8 @@ static int socket_set_reusable(int sockfd) {
 }
 
 /**
- * @brief Convert sockaddr_in structure to string value (uses static buffer, not
- * thread-safe)
+ * @brief Convert sockaddr_in structure to string value
+ * (uses static buffer, not thread-safe)
  *
  * @param addr sockaddr_in structure pointer
  * @return char* Pointer to static string buffer
