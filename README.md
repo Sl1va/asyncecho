@@ -2,8 +2,6 @@
 
 ## Build dependencies
 
-The tool builds and runs successfully
-
 - `gcc` 9.4.0 or higher
 - `libev-dev` 4
 - `cmake` 3.16 or higher
@@ -25,6 +23,9 @@ make
 ```
 
 ## Running
+
+The tool does not require any arguments and can be run simply by executing binary.
+It listens for any connection on port 5000 and provides echo responses for any message.
 
 For testing purposes standard `nc` tool can be used.
 
