@@ -180,7 +180,7 @@ static int socket_set_reusable(int sockfd) {
 static char *addr2str(struct sockaddr_in *addr) {
     // NOTE: not thread-safe, but does not require deinitialization
     // (Fine for asynchronous event loop)
-    static char buf[BUFFER_SIZE] = {0};
+    static char buf[64] = {0};
     memset(buf, 0, sizeof(buf));
 
     char ipaddr[INET_ADDRSTRLEN] = {0};
